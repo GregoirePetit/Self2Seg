@@ -13,19 +13,19 @@ parser.add_argument(
     "--output_directory",
     type=str,
     help="directory for outputs",
-    default="/home/nadja/Self2Seg/Self2Seg/results_test/",
+    default="/home/user/Documents/codes/Self2Seg/output/",
 )
 parser.add_argument(
     "--input_directory",
     type=str,
     help="directory for input files",
-    default="/home/nadja/Self2Seg/Self2Seg/data/",
+    default="/home/user/Documents/codes/Self2Seg/input/",
 )
 parser.add_argument(
     "--image_name",
     type=str,
     help="name of single image to process",
-    default = None
+    default = "magneticnanoflowers.jpg"
 )
 parser.add_argument("--learning_rate", type=float, help="learning rate", default=2e-4)
 parser.add_argument(
@@ -34,7 +34,7 @@ parser.add_argument(
 parser.add_argument(
     "--lam", type=list, help="regularization parameter of CV", default=[0.01, 0.02]
 )
-parser.add_argument("--dataset", type=str, help="Which dataset", default="DSB2018_n30")
+parser.add_argument("--dataset", type=str, help="Which dataset", default="phenix")
 parser.add_argument(
     "--number_of_denoisers",
     type=int,
@@ -75,7 +75,19 @@ args = parser.parse_args()
 if args.image_name !=None:
     args.dataset = args.dataset+'/' + args.image_name
 
-boxes = np.load(args.initialization_boxes)
+# create boxes for initialization.
+boxes = {}
+boxes['fg'] = np.zeros((256, 256))
+boxes['bg'] = np.zeros((256, 256))
+boxes['fg'][100:150, 100:150] = 1
+boxes['bg'][50:100, 50:100] = 1
+
+np.save(args.output_directory + 'boxes.npy', boxes)
+
+args.initialization_boxes = args.output_directory + 'boxes.npy'
+
+
+boxes = np.load(args.initialization_boxes, allow_pickle=True).item()
 
 box_fg = boxes['fg']
 box_bg = boxes['bg']

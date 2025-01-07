@@ -10,7 +10,8 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 
 
-
+import sys
+sys.path.append('/home/user/Documents/codes/Self2Seg/')
 from layer import *
 from utils import *
 from Functions_pytorch import *
