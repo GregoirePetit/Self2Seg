@@ -82,8 +82,8 @@ if args.image_name !=None:
 boxes = {}
 boxes['fg'] = np.zeros((256, 256))
 boxes['bg'] = np.zeros((256, 256))
-boxes['fg'][100:150, 100:150] = 1
-boxes['bg'][50:100, 50:100] = 1
+boxes['bg'][100:200, 0:100] = 1 # red box
+boxes['fg'][150:225, 125:200] = 1 # blue box
 
 np.save(args.output_directory + 'boxes.npy', boxes)
 
@@ -117,7 +117,16 @@ if args.dataset.endswith(".png") or args.dataset.endswith(".jpg"):
     ##### create halfs with same mean
     # f[:,:,:140]=f[:,:,:140]+torch.abs(torch.mean(f[:,:,:140])-torch.mean(f[:,:,140:]))
     ## add gaussian noise
-    img = f + 0.1 * torch.randn_like(f) * torch.max(f)
+    img = f
+    # plot the image with boxes over it in transparent colors qnd legends
+    plt.figure()
+    # overlay boxes
+    plt.imshow(box_fg, alpha=0.5, cmap="Reds")
+    plt.imshow(box_bg, alpha=0.5, cmap="Blues")
+    plt.imshow(img_clean, alpha=0.5)
+    plt.axis("off")
+    plt.show()
+
     for lam in lambdas:
         seg, den = noise2seg(
             img,

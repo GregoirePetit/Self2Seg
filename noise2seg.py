@@ -232,7 +232,7 @@ def noise2seg(
                             # plt.subtitle('Final Segmentation')
                             plt.show()
                             plt.savefig(
-                                "/home/nadja/Self2Seg/Self2Seg/results/image_"+ str(lam)+ ".svg"
+                                "/home/user/Documents/codes/forks/Self2Seg/output/image_"+ str(lam)+ ".svg"
                             )
                             plt.close()
                 
@@ -278,24 +278,9 @@ def noise2seg(
                         0
                     ].cpu() * (1 - denoise_mask.cpu())
                     print(torch.max(composite_image), torch.min(composite_image))
-                    #composite_image -= torch.min(composite_image)
-                    #composite_image /= torch.max(composite_image)
                     input_image = mynet.f[0].cpu()
-                    #input_image -= torch.min(input_image)
-                    #input_image /= torch.max(input_image)
-                    #plt.subplot(131)
-                    #plt.imshow(composite_image)
-                    #plt.title("Denoised image fg")
-                    #plt.subplot(132)
-                    #plt.imshow(mynet.f[0].cpu())
-                    #plt.title("Input")
-                    #plt.show()
                     mynet.notdone = True
     
-                    #plt.plot(mynet.en, label="total energy")
-                    #plt.legend()
-                    #plt.show()
-                    #plt.close()
                     curr_loss.append(mynet.current_loss)
                     try:
                         if mynet.previous_loss > mynet.current_loss and i > 1:
