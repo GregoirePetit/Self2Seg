@@ -14,13 +14,13 @@ parser.add_argument(
     "--output_directory",
     type=str,
     help="directory for outputs",
-    default="/home/user/Documents/codes/Self2Seg/output/",
+    default="/home/user/Documents/codes/forks/Self2Seg/output/",
 )
 parser.add_argument(
     "--input_directory",
     type=str,
     help="directory for input files",
-    default="/home/user/Documents/codes/Self2Seg/input/",
+    default="/home/user/Documents/codes/forks/Self2Seg/input/",
 )
 parser.add_argument(
     "--image_name",
@@ -73,6 +73,8 @@ torch.manual_seed(0)
 """ which values of regularization parameter lambda  """
 args = parser.parse_args()
 
+lambdas = args.lam
+
 if args.image_name !=None:
     args.dataset = args.dataset+'/' + args.image_name
 
@@ -111,7 +113,7 @@ if args.dataset.endswith(".png") or args.dataset.endswith(".jpg"):
     img_clean = np.copy(img).astype(np.uint8)
     f = torch.tensor(img/np.max(img))
     ##### add dimension
-    f = f.unsqueeze(0).to(device)
+    f = f.unsqueeze(0)#.to(device)
     ##### create halfs with same mean
     # f[:,:,:140]=f[:,:,:140]+torch.abs(torch.mean(f[:,:,:140])-torch.mean(f[:,:,140:]))
     ## add gaussian noise
@@ -123,8 +125,8 @@ if args.dataset.endswith(".png") or args.dataset.endswith(".jpg"):
             lam=lam,
             learning_rate=args.learning_rate,
             use_filter=False,
-            box_foreground=args.box_fg,
-            box_background=args.box_bg,
+            box_foreground=box_fg,
+            box_background=box_bg,
             number_of_denoisers=2,
             device=device,
         )
