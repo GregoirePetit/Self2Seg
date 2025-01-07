@@ -9,11 +9,10 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
 
-
-
 from layer import *
 from utils import *
 from Functions_pytorch import *
+
 
 
 
@@ -42,11 +41,11 @@ class TwoCon(nn.Module):
 class Net(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = TwoCon(1, 64,pad = True)
-        self.conv2 = TwoCon(64, 64)
-        self.conv3 = TwoCon(64, 64)
-        self.conv4 = TwoCon(64, 64)  
-        self.conv6 = nn.Conv2d(64,1,1)
+        self.conv1 = TwoCon(3, 128,pad = True)
+        self.conv2 = TwoCon(128, 128)
+        self.conv3 = TwoCon(128, 128)
+        self.conv4 = TwoCon(128, 128)  
+        self.conv6 = nn.Conv2d(128,3,1)
         
 
     def forward(self, x):
@@ -54,7 +53,7 @@ class Net(nn.Module):
         x2 = self.conv2(x1)
         x3 = self.conv3(x2)
         x = self.conv4(x3)
-        x = torch.sigmoid(self.conv6(x))
+        x = self.conv6(x)
         return x
 
 
@@ -72,7 +71,7 @@ def image_loader(image, device, p1, p2):
 class Denseg_N2F:
     def __init__(
         self,
-        learning_rate: float = 1e-2,
+        learning_rate: float = 1e-1,
         lam: float = 0.01,
         device: str = 'cuda:0',
         verbose = False,
@@ -121,6 +120,8 @@ class Denseg_N2F:
         self.iteration_index = 0
         self.variance = []
         self.rotation_list=[]
+        self.use_filter = False
+        self.ps_other = -0.1
         
     def normalize(self,f): 
         '''normalize image to range [0,1]'''
@@ -132,12 +133,13 @@ class Denseg_N2F:
     def initialize(self,f):
         #prepare input for segmentation
         f = self.normalize(f)
-        self.p = gradient(torch.clone(f))
+        self.p = gradient(torch.clone(torch.sum(f,-1)))
         self.q = torch.clone(f)
         self.r = torch.clone(f)
-        self.x_tilde = torch.clone(f)
+        self.x_tilde = torch.clone(torch.sum(f,-1))
         self.x = torch.clone(f)
         self.f = torch.clone(f)
+
 
  ######################## Classical Chan Vese step############################################       
     def segmentation_step(self,f):
@@ -178,17 +180,18 @@ class Denseg_N2F:
     def compute_energy(self,x=None):
         if x == None:
             x = torch.clone(self.x)
-        diff1 = torch.clone(self.f-self.f1).float()
-        diff2 = torch.clone(self.f - self.mu_r2).float()
-        energy = torch.sum((diff1)**2*x)+ torch.sum((diff2)**2*(1-x)) + self.lam*norm1(gradient(torch.clone(x)))
+
+        diff1 = torch.sum((torch.clone(self.f-self.f1)**2).float(),-1)
+        diff2 = torch.sum(((self.f - self.mu_r2)**2).float(),-1)
+        energy = torch.sum(diff1*x)+ torch.sum(diff2*(1-x)) + self.lam*norm1(gradient(torch.clone(x)))
         return energy.cpu()
     
     def compute_fidelity(self,x = None):
         if x == None:
             x = torch.clone(self.x)
-        diff1 = torch.clone(self.f-self.f1).float()
-        diff2 = torch.clone(self.f - self.mu_r2).float()
-        fidelity = torch.sum((diff1)**2*x)+ torch.sum((diff2)**2*(1-x))
+        diff1 = torch.sum((torch.clone(self.f-self.f1)**2).float())
+        diff2 = torch.sum((torch.clone(self.f - self.mu_r2)**2).float())
+        fidelity = torch.sum(diff1*x)+ torch.sum(diff2*(1-x))
         return fidelity.cpu()
 
 ##################### accelerated segmentation algorithm bg constant############################
@@ -202,28 +205,42 @@ class Denseg_N2F:
 
         # compute difference between noisy input and denoised image
         #compute difference between constant of background and originial noisy image
-        kernel = torch.ones(1,1,5,5)/25
+        kernel = torch.ones(1,3,5,5)/25
         kernel = kernel.to(self.device)
         kernel = kernel.to(self.device)
         # f = torch.clone(self.f)       
         diff1 = torch.clone((f_orig-f1)).float()
-        if self.method == "joint1" :
+        n_d1 = torch.sqrt(torch.sum(diff1**2))
+        diff1 = diff1
+        if self.use_filter == True :
+            print("filter", self.method)
+            diff1 = torch.nn.functional.conv2d(diff1.movedim(3,1), kernel,padding = 2)
+            diff1 = diff1.movedim(1,3)
+        print('diff 1',torch.sum(diff1**2))
             
-            print("filter", self.method)
-            diff1 = torch.nn.functional.conv2d(diff1, kernel,padding = 2)
-
         diff2 = ((torch.clone(f_orig - self.mu_r2))).float()
-        if self.method == "joint1" :
+        n_d2 = torch.sqrt(torch.sum(diff2**2))
+        diff2 = diff2*n_d1/n_d2
+        if self.use_filter == True :
             print("filter", self.method)
-            diff2 = torch.nn.functional.conv2d(diff2, kernel,padding = 2)
+            diff2 = torch.nn.functional.conv2d(diff2.movedim(3,1), kernel,padding = 2)
+            diff2 = diff2.movedim(1,3)
+        print('diff 2', torch.sum(diff2**2))
+            
+        
 
        # diff1 = torch.nn.functional.conv2d(diff2, kernel,padding = 1)
-        plt.subplot(121)
-        plt.imshow((diff2**2).cpu()[0])
+        plt.subplot(131)
+        plt.imshow(torch.sum(diff2**2,-1).cpu()[0])
+        plt.colorbar()
         plt.title("diff2")
-        plt.subplot(122)
-        plt.imshow((diff1**2).cpu()[0])
+        plt.subplot(132)
+        plt.imshow(torch.sum(diff1**2,-1).cpu()[0])
+        plt.colorbar()
         plt.title("diff1")
+        plt.subplot(133)
+        plt.imshow(torch.sum(diff1**2,-1).cpu()[0]<torch.sum(diff2**2,-1).cpu()[0])
+        plt.title('diff1>diff2')
         plt.show()
 
 
@@ -235,19 +252,15 @@ class Denseg_N2F:
         ''' Update dual variables of image f'''
         for i in range(iterations):
             self.en.append(self.compute_energy())
-
             p1 = proj_l1_grad(self.p + self.sigma_tv*gradient(self.x_tilde), self.lam)  # update of TV
-    
             # Fidelity term without norm (change this in funciton.py)
             #self.p = p1.clone()
             self.p = p1.clone()
             # Update primal variables
             self.x_old = torch.clone(self.x)  
-    
-    
             # constant difference term
             #filteing for smoother differences between denoised images and noisy input images
-            self.x = proj_unitintervall((self.x_old + self.tau*div(p1) - self.tau*((diff1)**2) +  self.tau*((diff2)**2 + self.mu*self.reference))/(1+self.tau*self.mu)) # proximity operator of indicator function on [0,1]
+            self.x = proj_unitintervall((self.x_old + self.tau*div(p1) - self.tau*(torch.sum((diff1)**2,-1)) +  self.tau*(torch.sum((diff2)**2,-1) + self.mu*self.reference))/(1+self.tau*self.mu)) # proximity operator of indicator function on [0,1]
             ######acceleration variables
             self.theta=1/np.sqrt(1+2*self.tau*self.mu)
             self.tau=self.theta*self.tau
@@ -257,18 +270,18 @@ class Denseg_N2F:
            # self.x = torch.round(self.x)
             if self.verbose == True:
                 fidelity = self.compute_fidelity()
-                fid_den = torch.sum((diff1)**2*self.x)
-                fid_fg_denoiser_bg = (torch.sum((diff1)**2*(1-self.x))).cpu()
-                fid_bg_denoiser_fg = (torch.sum((diff2)**2*(self.x))).cpu()
+                fid_den = torch.sum(torch.sum((diff1)**2,-1)*self.x)
+                fid_fg_denoiser_bg = (torch.sum(torch.sum((diff1)**2,-1)*(1-self.x))).cpu()
+                fid_bg_denoiser_fg = (torch.sum(torch.sum((diff2)**2,-1)*(self.x))).cpu()
                 self.fidelity_bg_d_fg.append(fid_bg_denoiser_fg)
                 self.fidelity_fg_d_bg.append(fid_fg_denoiser_bg)
                 self.fidelity_fg.append(fid_den.cpu())
-                fid_const =( torch.sum((diff2**2*(1-self.x)))).cpu()
+                fid_const =( torch.sum(torch.sum(diff2**2,-1)*(1-self.x))).cpu()
                 self.fidelity_bg.append(fid_const)
                 total = norm1(gradient(self.x))
                 self.fid.append(fidelity.cpu())
                 tv_p = norm1(gradient(self.x))
-                tv_pf = norm1(gradient(self.x*f_orig))
+
                 self.tv.append(total.cpu())
                 energy = fidelity + self.lam*tv_p
                 #self.en.append(energy.cpu())
@@ -299,74 +312,75 @@ class Denseg_N2F:
     def denoising_step_r1(self):
         ''' fidelity foreground is assumed to be constant '''
         f = torch.clone(self.f)
-        self.f1 = torch.sum(f*(self.x))/(torch.sum(self.x)+1e-5)
+        self.f1 = torch.sum(f*torch.stack(3*[self.x],-1),dim = [0,1])/(torch.sum(self.x)+1e-5)
+        print(self.f1.shape)
 
     def denoising_step_r2(self):
         ''' fidelity background is assumed to be constant '''
         f = torch.clone(self.f)
-        self.mu_r2 = torch.sum(f*(1-self.x))/(torch.sum(1-self.x)+1e-5)
+        self.mu_r2 = torch.sum(f*torch.stack(3*[(1-self.x)],-1), dim = [0,1])/(torch.sum(1-self.x)+1e-5)
 
  
       
     def preprocessing_N2F(self,f, loss_mask):
             img = f[0].cpu().numpy()#*loss_mask[0].cpu().numpy()
             img = np.expand_dims(img,axis=0)
-            img = np.expand_dims(img, axis=0)
+            img = np.moveaxis(img,3,1)
             
             img_test = f[0].cpu().numpy()
             img_test = np.expand_dims(img_test,axis=0)
-            img_test  = np.expand_dims(img_test, axis=0)
+            img_test  = np.moveaxis(img_test,3,1)
             
             minner = np.min(img)
             img = img -  minner
             maxer = np.max(img)
             img = img/ maxer
             img = img.astype(np.float32)
-            img = img[0,0]
+            img = img[0]
             
             minner_test = np.min(img_test)
             img_test = img_test -  minner_test
             maxer_test = np.max(img_test)
             img_test = img_test/ maxer
             img_test = img_test.astype(np.float32)
-            img_test = img_test[0,0]
+            img_test = img_test[0]
     
             shape = img.shape
     
              
             listimgH_mask = []
             listimgH = []
-            Zshape = [shape[0],shape[1]]
-            if shape[0] % 2 == 1:
-                Zshape[0] -= 1
+            Zshape = [shape[1],shape[2]]
             if shape[1] % 2 == 1:
+                Zshape[0] -= 1
+            if shape[2] % 2 == 1:
                 Zshape[1] -=1  
-            imgZ = img[:Zshape[0],:Zshape[1]]
-            imgM = loss_mask[0,:Zshape[0],:Zshape[1]]
-            
-            imgin = np.zeros((Zshape[0]//2,Zshape[1]),dtype=np.float32)
-            imgin2 = np.zeros((Zshape[0]//2,Zshape[1]),dtype=np.float32)
+            imgZ = img[:,:Zshape[0],:Zshape[1]]
+            imgM = loss_mask[0,:Zshape[0],:Zshape[1]].cpu().numpy()
+
+            imgin = np.zeros((3,Zshape[0]//2,Zshape[1]),dtype=np.float32)
+            imgin2 = np.zeros((3,Zshape[0]//2,Zshape[1]),dtype=np.float32)
                      
-            imgin_mask = np.zeros((Zshape[0]//2,Zshape[1]),dtype=np.float32)
-            imgin2_mask = np.zeros((Zshape[0]//2,Zshape[1]),dtype=np.float32)
-            for i in range(imgin.shape[0]):
-                for j in range(imgin.shape[1]):
+            imgin_mask = np.zeros((3,Zshape[0]//2,Zshape[1]),dtype=np.float32)
+            imgin2_mask = np.zeros((3,Zshape[0]//2,Zshape[1]),dtype=np.float32)
+            for i in range(imgin.shape[1]):
+                for j in range(imgin.shape[2]):
                     if j % 2 == 0:
-                        imgin[i,j] = imgZ[2*i+1,j]
-                        imgin2[i,j] = imgZ[2*i,j]
-                        imgin_mask[i,j] = imgM[2*i+1,j]
-                        imgin2_mask[i,j] = imgM[2*i,j]
+                        imgin[:,i,j] = imgZ[:,2*i+1,j]
+                        imgin2[:,i,j] = imgZ[:,2*i,j]
+                        imgin_mask[:,i,j] = imgM[2*i+1,j]
+                        imgin2_mask[:,i,j] = imgM[2*i,j]
+
                     if j % 2 == 1:
-                        imgin[i,j] = imgZ[2*i,j]
-                        imgin2[i,j] = imgZ[2*i+1,j]
-                        imgin_mask[i,j] = imgM[2*i,j]
-                        imgin2_mask[i,j] = imgM[2*i+1,j]
+                        imgin[:,i,j] = imgZ[:,2*i,j]
+                        imgin2[:,i,j] = imgZ[:,2*i+1,j]
+                        imgin_mask[:,i,j] = imgM[2*i,j]
+                        imgin2_mask[:,i,j] = imgM[2*i+1,j]
+
             imgin = torch.from_numpy(imgin)
-            imgin = torch.unsqueeze(imgin,0)
             imgin = torch.unsqueeze(imgin,0)
             imgin = imgin.to(self.device)
             imgin2 = torch.from_numpy(imgin2)
-            imgin2 = torch.unsqueeze(imgin2,0)
             imgin2 = torch.unsqueeze(imgin2,0)
             imgin2 = imgin2.to(self.device)
             listimgH.append(imgin)
@@ -375,68 +389,62 @@ class Denseg_N2F:
             
             imgin_mask = torch.from_numpy(imgin_mask)
             imgin_mask = torch.unsqueeze(imgin_mask,0)
-            imgin_mask = torch.unsqueeze(imgin_mask,0)
             imgin_mask = imgin_mask.to(self.device)
             imgin2_mask = torch.from_numpy(imgin2_mask)
-            imgin2_mask = torch.unsqueeze(imgin2_mask,0)
             imgin2_mask = torch.unsqueeze(imgin2_mask,0)
             imgin2_mask = imgin2_mask.to(self.device)
             listimgH_mask.append(imgin_mask)
             listimgH_mask.append(imgin2_mask)        
-             
+
             listimgV = []
             listimgV_mask=[]
-            Zshape = [shape[0],shape[1]]
-            if shape[0] % 2 == 1:
-                Zshape[0] -= 1
+            Zshape = [shape[1],shape[2]]
             if shape[1] % 2 == 1:
+                Zshape[0] -= 1
+            if shape[2] % 2 == 1:
                  Zshape[1] -=1  
-            imgZ = img[:Zshape[0],:Zshape[1]]
-            imgM = loss_mask[0,:Zshape[0],:Zshape[1]]
+            imgZ = img[:,:Zshape[0],:Zshape[1]]
+            imgM = loss_mask[0,:Zshape[0],:Zshape[1]].cpu()
     
              
-            imgin3 = np.zeros((Zshape[0],Zshape[1]//2),dtype=np.float32)
-            imgin4 = np.zeros((Zshape[0],Zshape[1]//2),dtype=np.float32)
-            imgin3_mask = np.zeros((Zshape[0],Zshape[1]//2),dtype=np.float32)
-            imgin4_mask = np.zeros((Zshape[0],Zshape[1]//2),dtype=np.float32)
-            for i in range(imgin3.shape[0]):
-                for j in range(imgin3.shape[1]):
+            imgin3 = np.zeros((3,Zshape[0],Zshape[1]//2),dtype=np.float32)
+            imgin4 = np.zeros((3,Zshape[0],Zshape[1]//2),dtype=np.float32)
+            imgin3_mask = np.zeros((3,Zshape[0],Zshape[1]//2),dtype=np.float32)
+            imgin4_mask = np.zeros((3,Zshape[0],Zshape[1]//2),dtype=np.float32)
+            for i in range(imgin3.shape[1]):
+                for j in range(imgin3.shape[2]):
                     if i % 2 == 0:
-                        imgin3[i,j] = imgZ[i,2*j+1]
-                        imgin4[i,j] = imgZ[i, 2*j]
-                        imgin3_mask[i,j] = imgM[i,2*j+1]
-                        imgin4_mask[i,j] = imgM[i, 2*j]
+                        imgin3[:,i,j] = imgZ[:,i,2*j+1]
+                        imgin4[:,i,j] = imgZ[:,i, 2*j]
+                        imgin3_mask[:,i,j] = imgM[i,2*j+1]
+                        imgin4_mask[:,i,j] = imgM[i, 2*j]
                     if i % 2 == 1:
-                        imgin3[i,j] = imgZ[i,2*j]
-                        imgin4[i,j] = imgZ[i,2*j+1]
-                        imgin3_mask[i,j] = imgM[i,2*j]
-                        imgin4_mask[i,j] = imgM[i,2*j+1]
+                        imgin3[:,i,j] = imgZ[:,i,2*j]
+                        imgin4[:,i,j] = imgZ[:,i,2*j+1]
+                        imgin3_mask[:,i,j] = imgM[i,2*j]
+                        imgin4_mask[:,i,j] = imgM[i,2*j+1]
             imgin3 = torch.from_numpy(imgin3)
-            imgin3 = torch.unsqueeze(imgin3,0)
             imgin3 = torch.unsqueeze(imgin3,0)
             imgin3 = imgin3.to(self.device)
             imgin4 = torch.from_numpy(imgin4)
-            imgin4 = torch.unsqueeze(imgin4,0)
             imgin4 = torch.unsqueeze(imgin4,0)
             imgin4 = imgin4.to(self.device)
             listimgV.append(imgin3)
             listimgV.append(imgin4)
             
+            
             imgin3_mask = torch.from_numpy(imgin3_mask)
-            imgin3_mask = torch.unsqueeze(imgin3_mask,0)
             imgin3_mask = torch.unsqueeze(imgin3_mask,0)
             imgin3_mask = imgin3_mask.to(self.device)
             imgin4_mask = torch.from_numpy(imgin4_mask)
             imgin4_mask = torch.unsqueeze(imgin4_mask,0)
-            imgin4_mask = torch.unsqueeze(imgin4_mask,0)
             imgin4_mask = imgin4_mask.to(self.device)
             listimgV_mask.append(imgin3_mask)
             listimgV_mask.append(imgin4_mask)        
-            
+
     
             img = torch.from_numpy(img)
          
-            img = torch.unsqueeze(img,0)
             img = torch.unsqueeze(img,0)
             img = img.to(self.device)
              
@@ -454,19 +462,18 @@ class Denseg_N2F:
             
             img_test = torch.from_numpy(img_test)
             img_test = torch.unsqueeze(img_test,0)
-            img_test = torch.unsqueeze(img_test,0)
             img_test = img_test.to(self.device)
             return listimg, listimg_mask, img_test, maxer, minner
     
     def reinitialize_network(self):
-        self.net = Net()
-        self.net.to(self.device)
+        #self.net = Net()
+        #self.net.to(self.device)
         self.optimizer1 = optim.Adam(self.net.parameters(), lr=self.learning_rate)
-        self.net1 = Net().to(self.device)
+        #self.net1 = Net().to(self.device)
         self.optimizer2 = optim.Adam(self.net1.parameters(), lr=self.learning_rate)
         
         
-    def N2Fstep(self, mask, region="foreground"):
+    def N2Fstep(self, mask,b_mask, region="foreground"):
         start_time = time.time()
         while self.notdone: 
             self.previous_loss = torch.clone(self.current_loss)
@@ -486,31 +493,60 @@ class Denseg_N2F:
             maxpsnr = -np.inf
             timesince = 0
             last10 = []
-            last10psnr = [0]*105
+            last10psnr = [-0.00001]*105
+            last10psnr_other = [0]*105
+            stop = False
+            better_than_last = False
+            min_epochs = 500
+            epoch = 0
             #cleaned = np.zeros_like(inputs)
-            while timesince <= 100:
-
+            
+            while (stop == False and epoch<min_epochs):#((timesince < 50 or np.mean(last10psnr)<np.mean(last10psnr_other) or better_than_last == False)) and (stop == False and epoch<min_epochs):
+                #print(timesince<20, np.mean(last10psnr)<np.mean(last10psnr_other),stop, better_than_last)
+                #print(timesince<20 or np.mean(last10psnr)<np.mean(last10psnr_other)or better_than_last and stop == False)
                 indx = np.random.randint(0,len(listimg))
                 data = listimg[indx]
                 data_mask = listimg_mask[indx]
                 inputs = data[0]
                 labello = data[1]
                 loss_mask = data_mask[1]
+                epoch+=1
                 
                 if region == "foreground":
                     self.optimizer1.zero_grad()
                     inputs = torch.nn.functional.pad(inputs,(1,1,1,1),mode = 'reflect')
+                    [s0,s1,s2,s3] = inputs.shape
+                    randind1 = torch.randint(s1,(1,))
+                    randind2 = torch.randint(s2,(1,))
+                    randind3 = torch.randint(s3,(1,))
+                    const = inputs[:,randind1,randind2,randind3]
+                    #inputs = inputs-const
                     outputs = self.net(inputs)
-                    loss1 = torch.sum((outputs-labello)**2*loss_mask)#+ torch.sum(torch.min(self.f1)-torch.clip(outputs,max=torch.min(self.f1)))#+ 0.1*torch.sum((outputs -  torch.mean(outputs))**2)#/torch.sum(loss_mask)
+                    proportion = torch.sum(loss_mask)/torch.sum(torch.ones_like(loss_mask))
+                    #labello = labello -const
+                    
+                    sumshape = s0+s1+s2+s3
+                    loss1 = (1-proportion)*torch.nn.functional.mse_loss(outputs*loss_mask,labello*loss_mask)#+0.0001*proportion*(torch.nn.functional.mse_loss(outputs*(1-loss_mask)-labello*(1-loss_mask),(1-loss_mask)))#torch.nn.functional.binary_cross_entropy(outputs,labello,weight = loss_mask) #+ torch.sum(torch.min(self.f1)-torch.clip(outputs,max=torch.min(self.f1)))#+ 0.1*torch.sum((outputs -  torch.mean(outputs))**2)#/torch.sum(loss_mask)
                     loss1.backward()
                     self.optimizer1.step()
+                    #print(loss1.item())
                     running_loss1+=loss1.item()
                     
                 elif region == "background":
                     self.optimizer2.zero_grad()
                     inputs = torch.nn.functional.pad(inputs,(1,1,1,1),mode = 'reflect')
+                    [s0,s1,s2,s3] = inputs.shape
+                    randind1 = torch.randint(s1,(1,))
+                    randind2 = torch.randint(s2,(1,))
+                    randind3 = torch.randint(s3,(1,))
+                    const = inputs[:,randind1,randind2,randind3]
+                    #inputs = inputs-const
                     outputs = self.net1(inputs)
-                    loss1 = torch.sum((outputs-labello)**2*loss_mask)#+ torch.sum(torch.min(self.f1)-torch.clip(outputs,max=torch.min(self.f1)))#+ 0.1*torch.sum((outputs -  torch.mean(outputs))**2)#/torch.sum(loss_mask)
+                    #labello = labello - 
+                    proportion = torch.sum(loss_mask)/torch.sum(torch.ones_like(loss_mask))
+                    
+                    
+                    loss1 = (1-proportion)*torch.nn.functional.mse_loss(outputs*loss_mask,labello*loss_mask)#+0.0001*proportion*(torch.nn.functional.mse_loss(outputs*(1-loss_mask)-labello*(1-loss_mask),(1-loss_mask)))#torch.nn.functional.binary_cross_entropy(outputs,labello,weight = loss_mask) #+ torch.sum(torch.min(self.f1)-torch.clip(outputs,max=torch.min(self.f1)))#+ 0.1*torch.sum((outputs -  torch.mean(outputs))**2)#/torch.sum(loss_mask)
                     loss1.backward()
                     self.optimizer2.step()
                     running_loss1+=loss1.item()
@@ -528,53 +564,115 @@ class Denseg_N2F:
                     # compute the loss of the denoising in the current mask
                     self.val_loss_list_N2F.append((torch.sum((outputstest[0]-img_test[0])**2*self.x)/torch.sum(self.x)).cpu())
     
-                    cleaned = outputstest[0,0,:,:].cpu().detach().numpy() 
+                    cleaned = outputstest[0,:,:,:].cpu().detach().numpy() 
                     noisy = img_test.cpu().detach().numpy()
                     last10.append(cleaned)
     
                     ps = -np.sum((noisy-cleaned)**2*np.asarray(torch.round(mask).cpu()))/np.sum(np.asarray(torch.round(mask).cpu()))
+                    ps_other = -np.sum((noisy-cleaned)**2*np.asarray(torch.round(b_mask).cpu()))/np.sum(np.asarray(torch.round(b_mask).cpu()))
+
                     last10psnr.pop(0)
+                    last10psnr_other.pop(0)
                     last10psnr.append(ps)
+                    last10psnr_other.append(ps_other)
+
+                    
                     if ps > maxpsnr:
                         maxpsnr = ps
                         outclean = cleaned*maxer+minner
                         timesince = 0
                     else:
                         timesince+=1.0
+
+                
+                
+                H = np.mean(np.array(last10), axis=0)
+                mmask = np.stack(3*[mask[0].cpu()],0)
+                H1 = np.asarray(1*H[:,1:-1,1:-1])
+                H1 = H1[mmask[:,1:-1,1:-1]>0.5]
+                
+
+
+                
+
     
-            plt.plot(last10psnr) 
-            plt.title("psnr")
-            plt.show()
-            
-            
-            H = np.mean(np.array(last10), axis=0)
-            H1 = np.asarray(1*H[1:-1][1:-1])
-            H1 = H1[mask[1:-1][1:-1].cpu()>0.5]
-            if region == "foreground":
-                for g in self.optimizer1.param_groups:
-                    learning_rate = g['lr'] 
-            elif region == "background":
-                for g in self.optimizer2.param_groups:
-                    learning_rate = g['lr']     
-    
-            if np.sum((H1-np.mean(H1))>0) <= 9.5 and learning_rate != 0.000005:
-                learning_rate = 0.000005
-                g["lr"]=learning_rate
-                print("Reducing learning rate")
-            else:
-                self.notdone = False
-                print("--- %s seconds ---" % (time.time() - start_time))
-                start_time = time.time()
-    
+               
+                if region == "foreground":
+                    for g in self.optimizer1.param_groups:
+                        learning_rate = g['lr'] 
+                        
+                elif region == "background":
+                    for g in self.optimizer2.param_groups:
+                        learning_rate = g['lr']  
+                
+                if self.ps_other == 0:
+                    better_than_last = True
+                elif np.mean(last10psnr) > self.ps_other:
+                    better_than_last = True
+                    #print(np.mean(last10psnr),self.ps_other)
+                elif np.mean(last10psnr) < self.ps_other:
+                    better_than_last = False
+                    #print(np.mean(last10psnr),self.ps_other)  
+                    if timesince>50:
+                        g["lr"] /= 2
+                        print("Reducing learning rate", g["lr"])
+                        timesince = 0
+                if epoch%100 == 0:
+                    plt.plot(last10psnr, label = 'trained region')
+                    plt.plot(self.ps_other*np.ones_like(last10psnr), label = 'other region last')
+                    plt.plot(last10psnr_other, label = 'other region')
+                    plt.legend()
+                    plt.show()
+               # print(np.mean(last10psnr)<np.mean(last10psnr_other), g['lr']>1e-6, timesince)
+                if timesince > 50 and g["lr"]>1e-6: #and np.mean(last10psnr)>np.mean(last10psnr_other) 
+                       g["lr"] /= 2
+                       print("Reducing learning rate", g["lr"])
+                       timesince = 0
+                # if epoch%500 == 0:
+                #      #g["lr"] /= 2
+                #      #print("Reducing learning rate", g["lr"])
+                #      timesince = 0
+                if g["lr"]<1e-6:
+                    stop = True
+                    
+                
+
+                       
+                #print(np.sum((H1-np.mean(H1))>0))
+                if np.sum((H1-np.mean(H1))>0) <= 9.5 and learning_rate != 0.000005:
+                    learning_rate = 0.000005
+                    g["lr"]=learning_rate
+                    print("Reducing learning rate", learning_rate)
+                    #self.notdone = False
+                else:
+                    self.notdone = True
+                    #print("--- %s seconds ---" % (time.time() - start_time))
+                    start_time = time.time()
+                #print(timesince<20 or np.mean(last10psnr)<np.mean(last10psnr_other) or better_than_last ==False)
+                #print(stop==False)
+                #print('fuck',(timesince<20 or np.mean(last10psnr)<np.mean(last10psnr_other) or better_than_last==False) and (stop == False))
+
+
+               
+            self.ps_other = -np.sum((noisy-cleaned)**2*np.asarray(torch.round(b_mask).cpu()))/np.sum(np.asarray(torch.round(b_mask).cpu()))
+
+            self.notdone = False
             if region == "foreground":
                 #if we are in foreground Region, we want to have f1 returned
                 self.f1 = torch.from_numpy(H).to(self.device)
+                self.f1 = self.f1.movedim(0,2)
                 self.f1 = self.f1.unsqueeze(0)
+                
             elif region == "background":
                 #if we are in the bg region, our result is called mu_r2
                 self.mu_r2 = torch.from_numpy(H).to(self.device)
+                self.mu_r2 = self.mu_r2.movedim(0,2)
                 self.mu_r2 = self.mu_r2.unsqueeze(0) 
+            print(self.f1.shape,self.f.shape)
             self.en.append(self.compute_energy())
-            print('I did ', timesince, ' denoising iterations')
+            print('setting back learning rate')
+            #self.learning_rate /= 2
+            g["lr"] = self.learning_rate
+            print('I did ', epoch, ' denoising iterations')
             
 

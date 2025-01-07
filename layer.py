@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+
+
 class CNR2d(nn.Module):
     def __init__(self, nch_in, nch_out, kernel_size=4, stride=1, padding=1, norm='bnorm', relu=0.0, drop=[], bias=[]):
         super().__init__()

@@ -9,6 +9,7 @@ import torch
 
 
 
+
 '''----input has to be torch tensor of shape ([channels,h,w]), output has size [channels,2,h,w]----'''
 def gradient(img):
     z1 = torch.zeros_like(img)
