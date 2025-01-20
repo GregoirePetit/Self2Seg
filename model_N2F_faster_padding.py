@@ -65,7 +65,7 @@ def image_loader(image, device, p1, p2):
     image = torch.tensor(image).float()
     image= loader(image)
     image = image.unsqueeze(0)  #this is for VGG, may not be needed for ResNet
-    return image#.to(device)
+    return image.to(device)
 
 
 class Denseg_N2F:
@@ -98,8 +98,8 @@ class Denseg_N2F:
         self.f2 = []
         self.verbose = True
         self.notdone = True
-        self.net = Net()#.to(self.device)
-        self.net1 = Net()#.to(self.device)
+        self.net = Net().to(self.device)
+        self.net1 = Net().to(self.device)
         self.mu_r2 = None
         self.optimizer1 = optim.Adam(self.net.parameters(), lr=self.learning_rate)
         self.optimizer2= optim.Adam(self.net1.parameters(), lr=self.learning_rate)
@@ -173,7 +173,9 @@ class Denseg_N2F:
                 plt.plot(np.array(self.fid[:]), label = "fidelity")
               #  plt.plot(self.lam*np.array(self.tv[498:]))
                 plt.legend()
-                plt.show()
+                #plt.show()
+                plt.savefig('/home/gpetit/LIP6/codes/Self2Seg/output/energy_fidelity_iteration_'+str(self.iteration)+'.png')
+                plt.close()
         self.iteration += 1
 
 
@@ -200,14 +202,14 @@ class Denseg_N2F:
         ''' the standard method without acceleration! '''
     def segmentation_step2denoisers_acc_bg_constant(self,f, iterations, gt):
         energy_beginning = self.compute_energy()
-        f_orig = torch.clone(f)#.to(self.device)
+        f_orig = torch.clone(f).to(self.device)
         f1 = torch.clone(self.f1)
 
         # compute difference between noisy input and denoised image
         #compute difference between constant of background and originial noisy image
         kernel = torch.ones(1,3,5,5)/25
-        kernel = kernel#.to(self.device)
-        kernel = kernel#.to(self.device)
+        kernel = kernel.to(self.device)
+        kernel = kernel.to(self.device)
         # f = torch.clone(self.f)       
         diff1 = torch.clone((f_orig-f1)).float()
         n_d1 = torch.sqrt(torch.sum(diff1**2))
@@ -241,7 +243,10 @@ class Denseg_N2F:
         plt.subplot(133)
         plt.imshow(torch.sum(diff1**2,-1).cpu()[0]<torch.sum(diff2**2,-1).cpu()[0])
         plt.title('diff1>diff2')
-        plt.show()
+        #plt.show()
+        plt.savefig('/home/gpetit/LIP6/codes/Self2Seg/output/diff1_diff2_'+str(self.iteration_index)+'.png')
+        plt.close()
+
 
 
         q1 = torch.ones_like(f)
@@ -302,8 +307,9 @@ class Denseg_N2F:
 
               #  plt.plot(self.lam*np.array(self.tv[498:]))
                 plt.legend()
-                plt.show()
-
+                #plt.show()
+                plt.savefig('/home/gpetit/LIP6/codes/Self2Seg/output/energy_iteration_'+str(i)+'.png')
+                plt.close()
 
   
 
@@ -379,20 +385,20 @@ class Denseg_N2F:
 
             imgin = torch.from_numpy(imgin)
             imgin = torch.unsqueeze(imgin,0)
-            imgin = imgin#.to(self.device)
+            imgin = imgin.to(self.device)
             imgin2 = torch.from_numpy(imgin2)
             imgin2 = torch.unsqueeze(imgin2,0)
-            imgin2 = imgin2#.to(self.device)
+            imgin2 = imgin2.to(self.device)
             listimgH.append(imgin)
             listimgH.append(imgin2)
             
             
             imgin_mask = torch.from_numpy(imgin_mask)
             imgin_mask = torch.unsqueeze(imgin_mask,0)
-            imgin_mask = imgin_mask#.to(self.device)
+            imgin_mask = imgin_mask.to(self.device)
             imgin2_mask = torch.from_numpy(imgin2_mask)
             imgin2_mask = torch.unsqueeze(imgin2_mask,0)
-            imgin2_mask = imgin2_mask#.to(self.device)
+            imgin2_mask = imgin2_mask.to(self.device)
             listimgH_mask.append(imgin_mask)
             listimgH_mask.append(imgin2_mask)        
 
@@ -425,20 +431,20 @@ class Denseg_N2F:
                         imgin4_mask[:,i,j] = imgM[i,2*j+1]
             imgin3 = torch.from_numpy(imgin3)
             imgin3 = torch.unsqueeze(imgin3,0)
-            imgin3 = imgin3#.to(self.device)
+            imgin3 = imgin3.to(self.device)
             imgin4 = torch.from_numpy(imgin4)
             imgin4 = torch.unsqueeze(imgin4,0)
-            imgin4 = imgin4#.to(self.device)
+            imgin4 = imgin4.to(self.device)
             listimgV.append(imgin3)
             listimgV.append(imgin4)
             
             
             imgin3_mask = torch.from_numpy(imgin3_mask)
             imgin3_mask = torch.unsqueeze(imgin3_mask,0)
-            imgin3_mask = imgin3_mask#.to(self.device)
+            imgin3_mask = imgin3_mask.to(self.device)
             imgin4_mask = torch.from_numpy(imgin4_mask)
             imgin4_mask = torch.unsqueeze(imgin4_mask,0)
-            imgin4_mask = imgin4_mask#.to(self.device)
+            imgin4_mask = imgin4_mask.to(self.device)
             listimgV_mask.append(imgin3_mask)
             listimgV_mask.append(imgin4_mask)        
 
@@ -446,7 +452,7 @@ class Denseg_N2F:
             img = torch.from_numpy(img)
          
             img = torch.unsqueeze(img,0)
-            img = img#.to(self.device)
+            img = img.to(self.device)
              
             listimgV1 = [[listimgV[0],listimgV[1]]]
             listimgV2 = [[listimgV[1],listimgV[0]]]
@@ -462,14 +468,14 @@ class Denseg_N2F:
             
             img_test = torch.from_numpy(img_test)
             img_test = torch.unsqueeze(img_test,0)
-            img_test = img_test#.to(self.device)
+            img_test = img_test.to(self.device)
             return listimg, listimg_mask, img_test, maxer, minner
     
     def reinitialize_network(self):
         #self.net = Net()
-        #self.net#.to(self.device)
+        #self.net.to(self.device)
         self.optimizer1 = optim.Adam(self.net.parameters(), lr=self.learning_rate)
-        #self.net1 = Net()#.to(self.device)
+        #self.net1 = Net().to(self.device)
         self.optimizer2 = optim.Adam(self.net1.parameters(), lr=self.learning_rate)
         
         
@@ -622,7 +628,9 @@ class Denseg_N2F:
                     plt.plot(self.ps_other*np.ones_like(last10psnr), label = 'other region last')
                     plt.plot(last10psnr_other, label = 'other region')
                     plt.legend()
-                    plt.show()
+                    plt.savefig('/home/gpetit/LIP6/codes/Self2Seg/output/psnr_epoch_'+str(epoch)+'.png')
+                    #plt.show()
+                    plt.close()
                # print(np.mean(last10psnr)<np.mean(last10psnr_other), g['lr']>1e-6, timesince)
                 if timesince > 50 and g["lr"]>1e-6: #and np.mean(last10psnr)>np.mean(last10psnr_other) 
                        g["lr"] /= 2
@@ -659,13 +667,13 @@ class Denseg_N2F:
             self.notdone = False
             if region == "foreground":
                 #if we are in foreground Region, we want to have f1 returned
-                self.f1 = torch.from_numpy(H)#.to(self.device)
+                self.f1 = torch.from_numpy(H).to(self.device)
                 self.f1 = self.f1.movedim(0,2)
                 self.f1 = self.f1.unsqueeze(0)
                 
             elif region == "background":
                 #if we are in the bg region, our result is called mu_r2
-                self.mu_r2 = torch.from_numpy(H)#.to(self.device)
+                self.mu_r2 = torch.from_numpy(H).to(self.device)
                 self.mu_r2 = self.mu_r2.movedim(0,2)
                 self.mu_r2 = self.mu_r2.unsqueeze(0) 
             print(self.f1.shape,self.f.shape)

@@ -14,13 +14,13 @@ parser.add_argument(
     "--output_directory",
     type=str,
     help="directory for outputs",
-    default="/home/user/Documents/codes/forks/Self2Seg/output/",
+    default="/home/gpetit/LIP6/codes/Self2Seg/output/",
 )
 parser.add_argument(
     "--input_directory",
     type=str,
     help="directory for input files",
-    default="/home/user/Documents/codes/forks/Self2Seg/input/",
+    default="/home/gpetit/LIP6/codes/Self2Seg/input/",
 )
 parser.add_argument(
     "--image_name",
@@ -63,7 +63,7 @@ parser.add_argument(
     "--initialization_boxes",type = str, help="path to numpy array containing binary boxes for initialization?", default=None
 )
 
-device = "cuda:1"
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.manual_seed(0)
 """ set necessary parameters, which initialization should be used """
 """ should the differences be filtered"""
@@ -113,7 +113,7 @@ if args.dataset.endswith(".png") or args.dataset.endswith(".jpg"):
     img_clean = np.copy(img).astype(np.uint8)
     f = torch.tensor(img/np.max(img))
     ##### add dimension
-    f = f.unsqueeze(0)#.to(device)
+    f = f.unsqueeze(0).to(device)
     ##### create halfs with same mean
     # f[:,:,:140]=f[:,:,:140]+torch.abs(torch.mean(f[:,:,:140])-torch.mean(f[:,:,140:]))
     ## add gaussian noise
@@ -125,7 +125,11 @@ if args.dataset.endswith(".png") or args.dataset.endswith(".jpg"):
     plt.imshow(box_bg, alpha=0.5, cmap="Blues")
     plt.imshow(img_clean, alpha=0.5)
     plt.axis("off")
-    plt.show()
+    plt.legend(["foreground", "background", "image"])
+    plt.savefig(args.output_directory + "boxes_overlay.svg")
+    #plt.show()
+    plt.close()
+    #plt.close()
 
     for lam in lambdas:
         seg, den = noise2seg(
@@ -160,7 +164,7 @@ if args.dataset.endswith(".png") or args.dataset.endswith(".jpg"):
         plt.subplot(224)
         plt.imshow(img_clean)
         plt.axis('off')
-        plt.show()
+        ##plt.show()
         plt.savefig(
             args.output_directory
             + image_name
@@ -168,6 +172,7 @@ if args.dataset.endswith(".png") or args.dataset.endswith(".jpg"):
             + str(lam)
             + ".svg"
         )
+        plt.close()
 
         np.savez_compressed(
             args.output_directory

@@ -72,7 +72,9 @@ def noise2seg(
                         plt.subplot(133)
                         plt.imshow(mynet.background_mask.cpu()[0])
                         plt.title("Background box")
-                        plt.show()
+                        #plt.show()
+                        #plt.close()
+                        plt.savefig("/home/gpetit/LIP6/codes/Self2Seg/output/image_boxes.svg")
                         plt.close()
                         mynet.f1 = image.to(device)
                         mynet.f1 = mynet.f1 - torch.min(mynet.f1)
@@ -104,9 +106,10 @@ def noise2seg(
                     plt.subplot(122)
                     plt.imshow(mynet.x.cpu()[0])
                     plt.title("Segmentation with threshold 0.5")
-                    plt.show()
+                    #plt.show()
+                    #plt.close()
+                    plt.savefig("/home/gpetit/LIP6/codes/Self2Seg/output/image_threshold.svg")
                     plt.close()
-
                     mynet.first_mask = torch.clone(mynet.x)
                     mynet.background_mask = 1 - mynet.x
 
@@ -131,8 +134,11 @@ def noise2seg(
                     plt.subplot(122)
                     plt.imshow(mynet.x.cpu()[0])
                     plt.title("Segmentation with threshold 0.5")
-                    plt.show()
+                    #plt.show()
+                    #plt.close()
+                    plt.savefig("/home/gpetit/LIP6/codes/Self2Seg/output/image_denoise_threshold.svg")
                     plt.close()
+
 
                     mynet.first_mask = torch.clone(mynet.x)
                     background_mask = 1 - mynet.x
@@ -178,8 +184,10 @@ def noise2seg(
                     plt.imshow(mynet.x[0].cpu())
                     plt.colorbar()
                     plt.title("Input and obtained mask at epoch " + str(i))
-                    plt.show()
+                    #plt.show()
                     # here, we re-init the nw and the nw parameters and do another denoising step on update masks
+                    plt.savefig("/home/gpetit/LIP6/codes/Self2Seg/output/image_epoch_" + str(i) + ".svg")
+                    plt.close()
                     mynet.denoising_step_r1()
                     mynet.denoising_step_r2()
                     
@@ -230,9 +238,9 @@ def noise2seg(
                             plt.subplot(1, 3, 3)
                             plt.imshow(torch.round(mynet.x.cpu()[0]))
                             # plt.subtitle('Final Segmentation')
-                            plt.show()
+                            #plt.show()
                             plt.savefig(
-                                "/home/user/Documents/codes/forks/Self2Seg/output/image_"+ str(lam)+ ".svg"
+                                "/home/gpetit/LIP6/codes/Self2Seg/output/image_"+ str(lam)+ ".svg"
                             )
                             plt.close()
                 
@@ -250,11 +258,15 @@ def noise2seg(
                     plt.imshow(mynet.x[0].cpu())
                     plt.colorbar()
                     plt.title("Input and obtained mask at epoch " + str(i))
-                    plt.show()
+                    plt.savefig("/home/gpetit/LIP6/codes/Self2Seg/output/mask_epoch_" + str(i) + ".svg")
+                    #plt.show()
+                    plt.close()
                     # here, we re-init the nw and the nw parameters and do another denoising step on update masks
                     mynet.reinitialize_network()
                     plt.imshow(mynet.background_mask[0].cpu())
-                    plt.show()
+                    plt.savefig("/home/gpetit/LIP6/codes/Self2Seg/output/background_mask_epoch_" + str(i) + ".svg")
+                    #plt.show()
+                    plt.close()
                     mynet.N2Fstep(
                         ((mynet.x > 0.5).float()),
                         ((1 - mynet.x) > 0.5).float(),
@@ -317,9 +329,9 @@ def noise2seg(
                             plt.subplot(1, 3, 3)
                             plt.imshow(torch.round(mynet.x.cpu()[0]))
                             # plt.subtitle('Final Segmentation')
-                            plt.show()
+                            #plt.show()
                             plt.savefig(
-                                "/home/nadja/Self2Seg/Self2Seg/results/image_"
+                                "/home/gpetit/LIP6/codes/Self2Seg/output/image_"
                                 + str(lam)
                                 + ".svg"
                             )
